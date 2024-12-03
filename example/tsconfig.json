@@ -1,0 +1,10 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "paths": {
+      "expo-media-projection": ["../src/index"],
+      "expo-media-projection/*": ["../src/*"]
+    }
+  }
+}
