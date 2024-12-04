@@ -1,50 +1,119 @@
 package expo.modules.mediaprojection
 
+import android.net.Uri
+import android.util.Log
+import android.os.Build
+import android.app.Activity
+import android.content.Intent
+import android.content.Context
+import android.provider.Settings
+import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
+import expo.modules.kotlin.exception.Exceptions
 import expo.modules.kotlin.modules.ModuleDefinition
-import java.net.URL
+import expo.modules.kotlin.exception.toCodedException
+import android.media.projection.MediaProjectionManager
+import expo.modules.mediaprojection.overlay.OverlayService
+import expo.modules.mediaprojection.services.MediaProjectionService
 
 class ExpoMediaProjectionModule : Module() {
-  // Each module class must implement the definition function. The definition consists of components
-  // that describes the module's functionality and behavior.
-  // See https://docs.expo.dev/modules/module-api for more details about available components.
+  private val context: Context
+    get() = appContext.reactContext ?: throw Exceptions.ReactContextLost()
+
+  private var pendingOverlayPromise: Promise? = null
+  private var pendingMediaProjectionPromise: Promise? = null
+
   override fun definition() = ModuleDefinition {
-    // Sets the name of the module that JavaScript code will use to refer to the module. Takes a string as an argument.
-    // Can be inferred from module's class name, but it's recommended to set it explicitly for clarity.
-    // The module will be accessible from `requireNativeModule('ExpoMediaProjection')` in JavaScript.
-    Name("ExpoMediaProjection")
+    Name(TAG)
 
-    // Sets constant properties on the module. Can take a dictionary or a closure that returns a dictionary.
-    Constants(
-      "PI" to Math.PI
-    )
-
-    // Defines event names that the module can send to JavaScript.
-    Events("onChange")
-
-    // Defines a JavaScript synchronous function that runs the native code on the JavaScript thread.
-    Function("hello") {
-      "Hello world! 👋"
-    }
-
-    // Defines a JavaScript function that always returns a Promise and whose native code
-    // is by default dispatched on the different thread than the JavaScript runtime runs on.
-    AsyncFunction("setValueAsync") { value: String ->
-      // Send an event to JavaScript.
-      sendEvent("onChange", mapOf(
-        "value" to value
-      ))
-    }
-
-    // Enables the module to be used as a native view. Definition components that are accepted as part of
-    // the view definition: Prop, Events.
-    View(ExpoMediaProjectionView::class) {
-      // Defines a setter for the `url` prop.
-      Prop("url") { view: ExpoMediaProjectionView, url: URL ->
-        view.webView.loadUrl(url.toString())
+    AsyncFunction("takeScreenshot") { promise: Promise ->
+      try {
+        val serviceIntent = Intent(context, MediaProjectionService::class.java)
+        serviceIntent.putExtra(TRIGGER_MEDIA_PROJECTION_CAPTURE, true)
+        context.startService(serviceIntent)
+        promise.resolve(true)
+      } catch (e: Exception) {
+        Log.d("takeScreenshot", e.toString())
+        promise.reject(e.toCodedException())
       }
-      // Defines an event that the view can send to JavaScript.
-      Events("onLoad")
     }
+
+    AsyncFunction("stop") { promise: Promise ->
+      try {
+        context.stopService(Intent(context, MediaProjectionService::class.java))
+        context.stopService(Intent(context, OverlayService::class.java))
+        promise.resolve(true)
+      } catch (e: Exception) {
+        Log.d("stopMediaProjection", e.toString())
+        promise.reject(e.toCodedException())
+      }
+    }
+
+    AsyncFunction("showScreenshotButton") { promise: Promise ->
+      try {
+        val intent = Intent(context.applicationContext, OverlayService::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+          context.startForegroundService(intent)
+        } else { context.startService(intent) }
+        promise.resolve(true)
+      } catch (e: Exception) {
+        promise.reject(e.toCodedException())
+      }
+    }
+
+    AsyncFunction("askMediaProjectionPermission") { promise: Promise ->
+      try {
+        val mediaProjectionManager = context.getSystemService(MediaProjectionManager::class.java)
+        val intent = mediaProjectionManager.createScreenCaptureIntent()
+        appContext.throwingActivity.startActivityForResult(intent, MEDIA_PROJECTION_REQUEST_CODE)
+        pendingMediaProjectionPromise = promise
+      } catch (e: Throwable) {
+        Log.d("askMediaProjectionPermission", e.toString())
+        promise.reject(e.toCodedException())
+      }
+    }
+
+    AsyncFunction("askForOverlayPermission") { promise: Promise ->
+      try {
+        val allowed = Settings.canDrawOverlays(context)
+        if (allowed) { promise.resolve(true); return@AsyncFunction }
+
+        val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
+        intent.data = Uri.parse("package:" + context.packageName)
+        appContext.currentActivity?.startActivityForResult(intent, OVERLAY_REQUEST_CODE)
+        pendingOverlayPromise = promise
+      } catch (e: Exception) {
+        Log.d("askForOverlayPermission", e.toString())
+        promise.reject(e.toCodedException())
+      }
+    }
+
+    OnActivityResult { _, payload ->
+      val ok = payload.resultCode == Activity.RESULT_OK
+
+      if (payload.requestCode == OVERLAY_REQUEST_CODE) {
+        pendingOverlayPromise?.resolve(ok)
+        pendingOverlayPromise = null
+        return@OnActivityResult
+      }
+
+      if (payload.requestCode == MEDIA_PROJECTION_REQUEST_CODE) {
+        val intent = Intent(context, MediaProjectionService::class.java)
+        intent.putExtra("data", payload.data)
+        intent.putExtra("code", payload.resultCode)
+        intent.putExtra("width", context.resources.displayMetrics.widthPixels)
+        intent.putExtra("density", context.resources.displayMetrics.densityDpi)
+        intent.putExtra("height", context.resources.displayMetrics.heightPixels)
+        if (ok) context.startService(intent)
+        pendingMediaProjectionPromise?.resolve(ok)
+        pendingMediaProjectionPromise = null
+      }
+    }
+  }
+
+  companion object {
+    private const val OVERLAY_REQUEST_CODE = 2
+    private const val TAG = "ExpoMediaProjection"
+    private const val MEDIA_PROJECTION_REQUEST_CODE = 1
   }
 }
