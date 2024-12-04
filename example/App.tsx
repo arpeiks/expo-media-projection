@@ -2,9 +2,23 @@ import ExpoMediaProjection from "expo-media-projection";
 import { Button, SafeAreaView, ScrollView, Text, View } from "react-native";
 
 export default function App() {
-  const handleRequest = async () => {
-    const res = await ExpoMediaProjection.start();
+  const stop = async () => {
+    await ExpoMediaProjection.stop();
+  };
+
+  const takeScreenshot = async () => {
+    const res = await ExpoMediaProjection.takeScreenshot();
     console.log(res);
+  };
+
+  const start = async () => {
+    const overlay = await ExpoMediaProjection.askForOverlayPermission();
+    if (!overlay) return;
+
+    const mediaProjection = await ExpoMediaProjection.askMediaProjectionPermission();
+    if (!mediaProjection) return;
+
+    await ExpoMediaProjection.showScreenshotButton();
   };
 
   return (
@@ -12,16 +26,16 @@ export default function App() {
       <ScrollView style={styles.container}>
         <Text style={styles.header}>Module API Example</Text>
 
-        {/* <Group name="Constants">
-          <Text>{ExpoMediaProjection.PI}</Text>
-        </Group> */}
+        <Group name="Start">
+          <Button title="Start" onPress={start} />
+        </Group>
 
-        {/* <Group name="Functions">
-          <Text>{ExpoMediaProjection.hello()}</Text>
-        </Group> */}
+        <Group name="Take Screenshot">
+          <Button title="Take Screenshot" onPress={takeScreenshot} />
+        </Group>
 
-        <Group name="Async functions">
-          <Button title="Set value" onPress={handleRequest} />
+        <Group name="Stop">
+          <Button title="Stop" onPress={stop} />
         </Group>
 
         {/* <Group name="Events">
