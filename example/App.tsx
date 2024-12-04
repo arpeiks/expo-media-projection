@@ -1,38 +1,40 @@
-import { useEvent } from 'expo';
-import ExpoMediaProjection, { ExpoMediaProjectionView } from 'expo-media-projection';
-import { Button, SafeAreaView, ScrollView, Text, View } from 'react-native';
+import ExpoMediaProjection from "expo-media-projection";
+import { Button, SafeAreaView, ScrollView, Text, View } from "react-native";
 
 export default function App() {
-  const onChangePayload = useEvent(ExpoMediaProjection, 'onChange');
+  const handleRequest = async () => {
+    const res = await ExpoMediaProjection.start();
+    console.log(res);
+  };
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView style={styles.container}>
         <Text style={styles.header}>Module API Example</Text>
-        <Group name="Constants">
+
+        {/* <Group name="Constants">
           <Text>{ExpoMediaProjection.PI}</Text>
-        </Group>
-        <Group name="Functions">
+        </Group> */}
+
+        {/* <Group name="Functions">
           <Text>{ExpoMediaProjection.hello()}</Text>
-        </Group>
+        </Group> */}
+
         <Group name="Async functions">
-          <Button
-            title="Set value"
-            onPress={async () => {
-              await ExpoMediaProjection.setValueAsync('Hello from JS!');
-            }}
-          />
+          <Button title="Set value" onPress={handleRequest} />
         </Group>
-        <Group name="Events">
+
+        {/* <Group name="Events">
           <Text>{onChangePayload?.value}</Text>
-        </Group>
-        <Group name="Views">
+        </Group> */}
+
+        {/* <Group name="Views">
           <ExpoMediaProjectionView
             url="https://www.example.com"
             onLoad={({ nativeEvent: { url } }) => console.log(`Loaded: ${url}`)}
             style={styles.view}
           />
-        </Group>
+        </Group> */}
       </ScrollView>
     </SafeAreaView>
   );
@@ -58,13 +60,13 @@ const styles = {
   },
   group: {
     margin: 20,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     borderRadius: 10,
     padding: 20,
   },
   container: {
     flex: 1,
-    backgroundColor: '#eee',
+    backgroundColor: "#eee",
   },
   view: {
     flex: 1,
