@@ -20,6 +20,8 @@ class ExpoMediaProjectionModule : Module() {
   private val context: Context
     get() = appContext.reactContext ?: throw Exceptions.ReactContextLost()
 
+  private var pathType: String = "FOLDER"
+  private var path: String = "MediaProjection"
   private var pendingOverlayPromise: Promise? = null
   private var pendingMediaProjectionPromise: Promise? = null
 
@@ -61,8 +63,10 @@ class ExpoMediaProjectionModule : Module() {
       }
     }
 
-    AsyncFunction("askMediaProjectionPermission") { promise: Promise ->
+    AsyncFunction("askMediaProjectionPermission") { options: Map<String, Any>, promise: Promise ->
       try {
+        path = (options["path"] as? String)!!
+        pathType = (options["pathType"] as? String)!!
         val mediaProjectionManager = context.getSystemService(MediaProjectionManager::class.java)
         val intent = mediaProjectionManager.createScreenCaptureIntent()
         appContext.throwingActivity.startActivityForResult(intent, MEDIA_PROJECTION_REQUEST_CODE)
@@ -99,6 +103,8 @@ class ExpoMediaProjectionModule : Module() {
 
       if (payload.requestCode == MEDIA_PROJECTION_REQUEST_CODE) {
         val intent = Intent(context, MediaProjectionService::class.java)
+        intent.putExtra("path", path)
+        intent.putExtra("pathType", pathType)
         intent.putExtra("data", payload.data)
         intent.putExtra("code", payload.resultCode)
         intent.putExtra("width", context.resources.displayMetrics.widthPixels)

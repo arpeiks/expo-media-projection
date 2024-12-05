@@ -36,6 +36,8 @@ class MediaProjectionService : Service() {
     private var screenWidth = 0
     private var screenHeight = 0
     private var screenDensity = 0
+    private var pathType = "FOLDER"
+    private var path = "MediaProjection"
     private var resultData: Intent? = null
     private var virtualDisplay: VirtualDisplay? = null
     private var mediaProjection: MediaProjection? = null
@@ -50,10 +52,15 @@ class MediaProjectionService : Service() {
             return START_STICKY
         }
 
+        val mPath = intent.getStringExtra("path")
+        val mPathType = intent.getStringExtra("pathType")
         resultCode = intent.getIntExtra("code", -1)
         screenWidth = intent.getIntExtra("width", 720)
         screenDensity = intent.getIntExtra("density", 1)
         screenHeight = intent.getIntExtra("height", 1280)
+
+        if (mPath != null) path = mPath
+        if (mPathType != null) pathType = mPathType
 
         resultData = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             intent.getParcelableExtra("data", Intent::class.java)
@@ -147,8 +154,10 @@ class MediaProjectionService : Service() {
         val formatter = SimpleDateFormat("yyyy-MM-dd-HH-mm-ss", Locale.getDefault())
         val curTime = formatter.format(curDate).replace(" ", "")
 
-        val filename = getAppName() + "-" + curTime + ".png"
-        val folderPath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES).toString() + SCREENSHOT_FOLDER
+        val filename = getAppName() + "-" + curTime + ".jpg"
+        val folderPath = if (pathType == "FOLDER") {
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES).toString() + "/" + path + "/"
+        } else { path }
 
         val folder = File(folderPath)
         if (!folder.exists()) folder.mkdirs()
@@ -165,13 +174,16 @@ class MediaProjectionService : Service() {
 
             val file = File(filePath)
             val outputStream = FileOutputStream(file)
-            bitmap.compress(Bitmap.CompressFormat.PNG, 50, outputStream)
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 50, outputStream)
             bitmap.recycle()
             it.close()
 
             try {
                 outputStream.flush()
                 outputStream.close()
+
+                val currentTime = System.currentTimeMillis()
+                file.setLastModified(currentTime)
             } catch (e: IOException) {
                 Log.e(TAG, "Failed to release outputStream")
             }
@@ -227,7 +239,6 @@ class MediaProjectionService : Service() {
     }
 
     companion object {
-        private const val SCREENSHOT_FOLDER = "/Snappay/"
         private const val SCREENSHOT_VIBRATION_DURATION_MS = 300L
         private const val MEDIA_PROJECTION_NOTIFICATION_SERVICE_ID = 2
         private val TAG = MediaProjectionService::class.java.simpleName

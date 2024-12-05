@@ -15,7 +15,10 @@ export default function App() {
     const overlay = await ExpoMediaProjection.askForOverlayPermission();
     if (!overlay) return;
 
-    const mediaProjection = await ExpoMediaProjection.askMediaProjectionPermission();
+    const mediaProjection = await ExpoMediaProjection.askMediaProjectionPermission({
+      path: "/snapping/",
+      pathType: "FOLDER",
+    });
     if (!mediaProjection) return;
 
     await ExpoMediaProjection.showScreenshotButton();
