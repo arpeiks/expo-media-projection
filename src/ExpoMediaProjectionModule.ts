@@ -1,12 +1,11 @@
 import { requireNativeModule } from "expo";
 
-declare class ExpoMediaProjection {
+declare class ExpoMediaProjectionModule {
   stop(): Promise<boolean>;
-  start(): Promise<boolean>;
   takeScreenshot(): Promise<boolean>;
   showScreenshotButton(): Promise<boolean>;
   askForOverlayPermission(): Promise<boolean>;
   askMediaProjectionPermission(): Promise<boolean>;
 }
 
-export default requireNativeModule<ExpoMediaProjection>("ExpoMediaProjection");
+export default requireNativeModule<ExpoMediaProjectionModule>("ExpoMediaProjection");
