@@ -1,6 +1,6 @@
 {
   "name": "expo-media-projection-example",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
@@ -11,7 +11,8 @@
   "dependencies": {
     "expo": "~52.0.11",
     "react": "18.3.1",
-    "react-native": "0.76.3"
+    "react-native": "0.76.3",
+    "expo-media-library": "~17.0.3"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

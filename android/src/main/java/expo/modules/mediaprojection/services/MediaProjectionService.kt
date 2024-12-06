@@ -7,29 +7,34 @@ import java.util.Locale
 import android.os.Build
 import android.os.IBinder
 import android.os.Vibrator
-import java.io.IOException
 import android.app.Service
 import android.content.Intent
 import android.os.Environment
 import android.content.Context
 import android.graphics.Bitmap
-import java.io.FileOutputStream
 import android.app.Notification
 import java.text.SimpleDateFormat
 import android.os.VibratorManager
+import android.provider.MediaStore
 import android.os.VibrationEffect
 import android.graphics.PixelFormat
+import android.content.ContentValues
 import android.content.pm.ServiceInfo
 import expo.modules.mediaprojection.R
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.pm.PackageManager
 import android.content.pm.ApplicationInfo
-import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
+import android.hardware.display.DisplayManager
 import android.media.projection.MediaProjection
+import androidx.exifinterface.media.ExifInterface
 import android.media.projection.MediaProjectionManager
 import expo.modules.mediaprojection.TRIGGER_MEDIA_PROJECTION_CAPTURE
+
+fun normalizePath(path: String): String {
+    return path.replace(Regex("/{2,}"), "/") 
+}
 
 class MediaProjectionService : Service() {
     private var resultCode = 0
@@ -151,17 +156,17 @@ class MediaProjectionService : Service() {
         }
 
         val curDate = Date(System.currentTimeMillis())
-        val formatter = SimpleDateFormat("yyyy-MM-dd-HH-mm-ss", Locale.getDefault())
-        val curTime = formatter.format(curDate).replace(" ", "")
+        val curTime = SimpleDateFormat("yyyy-MM-dd-HH-mm-ss", Locale.getDefault()).format(curDate).replace(" ", "")
 
         val filename = getAppName() + "-" + curTime + ".jpg"
-        val folderPath = if (pathType == "FOLDER") {
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES).toString() + "/" + path + "/"
+        var folderPath = if (pathType == "FOLDER") {
+            (Environment.DIRECTORY_PICTURES).toString() + "/" + path + "/"
         } else { path }
+
+        folderPath = normalizePath(folderPath)
 
         val folder = File(folderPath)
         if (!folder.exists()) folder.mkdirs()
-        val filePath = folderPath + filename
 
         image.let {
             val planes = it.planes
@@ -172,21 +177,42 @@ class MediaProjectionService : Service() {
             val bitmap = Bitmap.createBitmap(it.width + rowPadding / pixelStride, it.height, Bitmap.Config.ARGB_8888)
             bitmap.copyPixelsFromBuffer(buffer)
 
-            val file = File(filePath)
-            val outputStream = FileOutputStream(file)
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 50, outputStream)
-            bitmap.recycle()
-            it.close()
+            val resolver = applicationContext.contentResolver
+            val imageCollection =
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+                } else {
+                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+                }
 
-            try {
-                outputStream.flush()
-                outputStream.close()
+            val currentTime = System.currentTimeMillis()
+            val formatter = SimpleDateFormat("yyyy:MM:dd HH:mm:ss", Locale.getDefault()) // Exif-compatible format
 
-                val currentTime = System.currentTimeMillis()
-                file.setLastModified(currentTime)
-            } catch (e: IOException) {
-                Log.e(TAG, "Failed to release outputStream")
+            val contentValues = ContentValues().apply {
+                put(MediaStore.Images.Media.DISPLAY_NAME, filename)
+                put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+                put(MediaStore.Images.Media.RELATIVE_PATH, folderPath)
+                put(MediaStore.Images.Media.DATE_TAKEN, currentTime)
             }
+
+            val imageUri = resolver.insert(imageCollection, contentValues)
+
+            if (imageUri != null) {
+                resolver.openOutputStream(imageUri)?.use { outputStream ->
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, 50, outputStream)
+                }
+
+                resolver.openFileDescriptor(imageUri, "rw")?.use { fileDescriptor ->
+                    val exif = ExifInterface(fileDescriptor.fileDescriptor)
+                    exif.setAttribute(ExifInterface.TAG_DATETIME_ORIGINAL, formatter.format(Date(currentTime)))
+                    exif.saveAttributes()
+                }
+            } else {
+                Log.e(TAG, "Failed to create MediaStore entry")
+            }
+
+            bitmap.recycle()
+            image.close()
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 val vibratorManager = applicationContext.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager

@@ -1,7 +1,12 @@
+import React from "react";
+import * as MediaLibrary from "expo-media-library";
 import ExpoMediaProjection from "expo-media-projection";
 import { Button, SafeAreaView, ScrollView, Text, View } from "react-native";
 
 export default function App() {
+  const path = "MyPictures";
+  const [mediaPermission, requestMediaPermission] = MediaLibrary.usePermissions({ granularPermissions: ["photo"] });
+
   const stop = async () => {
     await ExpoMediaProjection.stop();
   };
@@ -16,13 +21,41 @@ export default function App() {
     if (!overlay) return;
 
     const mediaProjection = await ExpoMediaProjection.askMediaProjectionPermission({
-      path: "/snapping/",
+      path,
       pathType: "FOLDER",
     });
-    if (!mediaProjection) return;
 
+    if (!mediaProjection) return;
     await ExpoMediaProjection.showScreenshotButton();
   };
+
+  const getAlbum = async (after?: MediaLibrary.Asset) => {
+    const status = mediaPermission?.status;
+    if (status !== "granted") await requestMediaPermission();
+
+    const album = await MediaLibrary.getAlbumAsync(path);
+    console.log("Album: ", JSON.stringify(album, null, 2));
+
+    if (!album?.assetCount) return [null, new Error("Album not available")];
+
+    const mediaLibrary = await MediaLibrary.getAssetsAsync({
+      album,
+      after,
+      first: 1,
+      mediaType: "photo",
+    });
+
+    console.log("MediaLibrary: ", JSON.stringify(mediaLibrary, null, 2));
+  };
+
+  React.useEffect(() => {
+    const subscription = MediaLibrary.addListener(() => {
+      console.log("Subscription triggered");
+      getAlbum();
+    });
+
+    return () => subscription.remove();
+  }, []);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -40,18 +73,6 @@ export default function App() {
         <Group name="Stop">
           <Button title="Stop" onPress={stop} />
         </Group>
-
-        {/* <Group name="Events">
-          <Text>{onChangePayload?.value}</Text>
-        </Group> */}
-
-        {/* <Group name="Views">
-          <ExpoMediaProjectionView
-            url="https://www.example.com"
-            onLoad={({ nativeEvent: { url } }) => console.log(`Loaded: ${url}`)}
-            style={styles.view}
-          />
-        </Group> */}
       </ScrollView>
     </SafeAreaView>
   );
